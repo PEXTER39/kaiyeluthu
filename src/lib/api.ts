@@ -5,6 +5,7 @@
  */
 import { paymentConfig, siteConfig } from "@/config/site";
 import { getPlan } from "@/data/course";
+import { isMockPayments } from "@/lib/payments";
 import type { AppEvent, Certificate, Enrollment, EventType, Payment, PlanId, Student, Submission, WatchProgress } from "./types";
 
 interface DB {
@@ -187,6 +188,11 @@ export async function checkPaymentReadiness(): Promise<{ ready: boolean; error?:
   const r = await call("/payment-status");
   if (!r.ok) {
     return { ready: false, error: r.status === 0 ? "Could not reach the payment server." : "The payment server is unavailable." };
+  }
+  if (isMockPayments()) {
+    return r.data?.demoEnabled
+      ? { ready: true }
+      : { ready: false, error: "Demo payments are not enabled on the payment server." };
   }
   if (!r.data?.configured) return { ready: false, error: "Live payment verification is not configured on the server." };
   if (r.data.keyId !== paymentConfig.razorpayKeyId) {

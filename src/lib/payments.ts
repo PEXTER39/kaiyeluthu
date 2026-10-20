@@ -2,7 +2,9 @@ import { paymentConfig } from "@/config/site";
 
 export type PayResult = { status: "success"; paymentId: string } | { status: "failed"; reason: string };
 
-export const isMockPayments = () => import.meta.env.DEV && (paymentConfig.mockPayments || !paymentConfig.razorpayKeyId);
+export const isMockPayments = () =>
+  paymentConfig.mockPayments &&
+  (import.meta.env.DEV || import.meta.env["VITE_ENABLE_DEMO_PAYMENTS"] === "true");
 export const isLivePaymentConfigured = () =>
   !paymentConfig.mockPayments &&
   paymentConfig.razorpayKeyId.startsWith(import.meta.env.PROD ? "rzp_live_" : "rzp_");

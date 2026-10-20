@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getPlan, plans } from "@/data/course";
 import { siteConfig } from "@/config/site";
-import { isLivePaymentConfigured, isMockPayments } from "@/lib/payments";
+import { isMockPayments } from "@/lib/payments";
 import { isValidIndianPhone } from "@/lib/rules";
 import { checkPaymentReadiness, logEvent, recordFailedPayment, recordPurchase } from "@/lib/api";
 
@@ -38,19 +38,11 @@ function Checkout() {
   const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<{ message: string; paymentId: string } | null>(null);
-  const [paymentReadiness, setPaymentReadiness] = useState<{ ready: boolean; error?: string } | null>(
-    isMockPayments() ? { ready: true } : null,
-  );
+  const [paymentReadiness, setPaymentReadiness] = useState<{ ready: boolean; error?: string } | null>(null);
 
   useEffect(() => { logEvent("checkout_started", { planId }); }, [planId]);
 
   useEffect(() => {
-    if (isMockPayments()) return;
-    if (!isLivePaymentConfigured()) {
-      setPaymentReadiness({ ready: false, error: "Live Razorpay payments are not configured for this site." });
-      return;
-    }
-
     let active = true;
     void checkPaymentReadiness().then((result) => {
       if (active) setPaymentReadiness(result);
@@ -134,7 +126,7 @@ function Checkout() {
 
         {paymentReadiness && !paymentReadiness.ready && (
           <div role="alert" className="mt-6 rounded-xl border border-destructive bg-destructive/5 p-4">
-            <p className="font-semibold text-destructive">Live payments are not available right now</p>
+            <p className="font-semibold text-destructive">Payments are not available right now</p>
             <p className="text-sm">{paymentReadiness.error} No payment has been taken. Please contact {siteConfig.contactEmail} for help.</p>
           </div>
         )}

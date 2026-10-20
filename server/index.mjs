@@ -242,11 +242,19 @@ function bundleFor(student) {
 }
 
 /* ------------------------------ payments ------------------------------ */
+function demoPaymentsEnabled() {
+  const hasRazorpayCredentials = Boolean(env.RAZORPAY_KEY_ID || env.RAZORPAY_KEY_SECRET);
+  return !hasRazorpayCredentials && (!PROD || env.ALLOW_MOCK_PAYMENTS === "true");
+}
+
 async function verifyPayment(paymentId, expectedRupees) {
   const id = String(paymentId || "");
   if (!id || id.length > 100) throw new HttpError(400, "bad_payment", "Missing payment id.");
   if (db.payments.some((p) => p.providerPaymentId === id)) throw new HttpError(409, "already_recorded", "This payment is already recorded. Please log in with your email.");
-  if (id.startsWith("mock_")) throw new HttpError(402, "mock_payment", "This was a simulated test payment, not a real payment. No money was taken.");
+  if (id.startsWith("mock_")) {
+    if (!demoPaymentsEnabled()) throw new HttpError(402, "mock_payment", "This was a simulated test payment, not a real payment. No money was taken.");
+    return;
+  }
 
   if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
     const auth = "Basic " + Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64");
@@ -264,10 +272,7 @@ async function verifyPayment(paymentId, expectedRupees) {
     if (p.currency !== "INR" || p.amount !== expectedRupees * 100) throw new HttpError(402, "amount_mismatch", "Payment amount does not match the plan.");
     return;
   }
-  // No Razorpay secret on the server: only allow the clearly marked test payments, and never in production.
-  if (PROD || env.ALLOW_MOCK_PAYMENTS === "false" || !id.startsWith("mock_")) {
-    throw new HttpError(402, "payments_not_configured", "Payments are not configured on the server yet.");
-  }
+  throw new HttpError(402, "payments_not_configured", "Payments are not configured on the server yet.");
 }
 
 /* ------------------------------ routes ------------------------------ */
@@ -280,7 +285,7 @@ async function route(req, res) {
   if (req.method === "GET" && p === "/api/payment-status") {
     const keyId = env.RAZORPAY_KEY_ID || "";
     const configured = Boolean(keyId && env.RAZORPAY_KEY_SECRET && (!PROD || keyId.startsWith("rzp_live_")));
-    return sendJson(res, 200, { ok: true, configured, keyId });
+    return sendJson(res, 200, { ok: true, configured, keyId, demoEnabled: demoPaymentsEnabled() });
   }
 
   if (req.method === "GET" && p === "/api/me") {
@@ -423,5 +428,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Kaiyeluthu API running on http://localhost:${PORT}`);
   console.log(`  email: ${emailProvider}${emailProvider === "console" ? " (codes print in this window)" : ""}`);
-  console.log(`  payments: ${env.RAZORPAY_KEY_SECRET ? "real Razorpay verification" : "test mode (mock payments only)"}`);
+  console.log(`  payments: ${env.RAZORPAY_KEY_SECRET ? "real Razorpay verification" : demoPaymentsEnabled() ? "demo payments (no money taken)" : "not configured"}`);
 });
