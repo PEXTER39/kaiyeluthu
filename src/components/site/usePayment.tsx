@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { isMockPayments, openRazorpay, type PayResult } from "@/lib/payments";
+import { isLivePaymentConfigured, isMockPayments, openRazorpay, type PayResult } from "@/lib/payments";
 
 type Opts = Parameters<typeof openRazorpay>[0];
 
@@ -11,7 +11,12 @@ export function usePayment() {
   const resolver = useRef<(r: PayResult) => void>(undefined);
 
   async function pay(opts: Opts): Promise<PayResult> {
-    if (!isMockPayments()) return openRazorpay(opts);
+    if (!isMockPayments()) {
+      if (!isLivePaymentConfigured()) {
+        return { status: "failed", reason: "Live payments are not configured. No payment was taken." };
+      }
+      return openRazorpay(opts);
+    }
     setMock(opts);
     return new Promise((res) => { resolver.current = res; });
   }

@@ -2,7 +2,10 @@ import { paymentConfig } from "@/config/site";
 
 export type PayResult = { status: "success"; paymentId: string } | { status: "failed"; reason: string };
 
-export const isMockPayments = () => paymentConfig.mockPayments || !paymentConfig.razorpayKeyId;
+export const isMockPayments = () => import.meta.env.DEV && (paymentConfig.mockPayments || !paymentConfig.razorpayKeyId);
+export const isLivePaymentConfigured = () =>
+  !paymentConfig.mockPayments &&
+  paymentConfig.razorpayKeyId.startsWith(import.meta.env.PROD ? "rzp_live_" : "rzp_");
 
 function loadScript(): Promise<boolean> {
   return new Promise((resolve) => {

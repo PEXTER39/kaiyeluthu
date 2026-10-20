@@ -3,7 +3,7 @@
  * The browser keeps a local copy (localStorage) so screens stay fast, while the
  * server is the master copy for students, plans, OTP login, progress and submissions.
  */
-import { siteConfig } from "@/config/site";
+import { paymentConfig, siteConfig } from "@/config/site";
 import { getPlan } from "@/data/course";
 import type { AppEvent, Certificate, Enrollment, EventType, Payment, PlanId, Student, Submission, WatchProgress } from "./types";
 
@@ -182,6 +182,18 @@ if (typeof window !== "undefined") {
 export function getEnrollment(studentId: string) { return read().enrollments.find((e) => e.studentId === studentId) ?? null; }
 
 export type PurchaseResult = { ok: true; loggedIn: boolean } | { ok: false; error: string };
+
+export async function checkPaymentReadiness(): Promise<{ ready: boolean; error?: string }> {
+  const r = await call("/payment-status");
+  if (!r.ok) {
+    return { ready: false, error: r.status === 0 ? "Could not reach the payment server." : "The payment server is unavailable." };
+  }
+  if (!r.data?.configured) return { ready: false, error: "Live payment verification is not configured on the server." };
+  if (r.data.keyId !== paymentConfig.razorpayKeyId) {
+    return { ready: false, error: "The website and server Razorpay keys do not match." };
+  }
+  return { ready: true };
+}
 
 /** Saves a successful payment on the server. New students are logged in straight away. */
 export async function recordPurchase(input: { name: string; email: string; phone: string; planId: PlanId; providerPaymentId?: string }): Promise<PurchaseResult> {

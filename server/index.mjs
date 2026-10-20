@@ -246,9 +246,9 @@ async function verifyPayment(paymentId, expectedRupees) {
   const id = String(paymentId || "");
   if (!id || id.length > 100) throw new HttpError(400, "bad_payment", "Missing payment id.");
   if (db.payments.some((p) => p.providerPaymentId === id)) throw new HttpError(409, "already_recorded", "This payment is already recorded. Please log in with your email.");
+  if (id.startsWith("mock_")) throw new HttpError(402, "mock_payment", "This was a simulated test payment, not a real payment. No money was taken.");
 
   if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
-    if (id.startsWith("mock_")) throw new HttpError(400, "bad_payment", "Test payments are not accepted.");
     const auth = "Basic " + Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64");
     let r = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(id)}`, { headers: { Authorization: auth } });
     if (!r.ok) throw new HttpError(402, "payment_not_found", "We could not confirm this payment with Razorpay.");
@@ -277,6 +277,11 @@ async function route(req, res) {
   checkOrigin(req);
 
   if (req.method === "GET" && p === "/api/health") return sendJson(res, 200, { ok: true });
+  if (req.method === "GET" && p === "/api/payment-status") {
+    const keyId = env.RAZORPAY_KEY_ID || "";
+    const configured = Boolean(keyId && env.RAZORPAY_KEY_SECRET && (!PROD || keyId.startsWith("rzp_live_")));
+    return sendJson(res, 200, { ok: true, configured, keyId });
+  }
 
   if (req.method === "GET" && p === "/api/me") {
     const s = currentStudent(req);

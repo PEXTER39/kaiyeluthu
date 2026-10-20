@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getPlan, plans } from "@/data/course";
 import { siteConfig } from "@/config/site";
-import { isMockPayments } from "@/lib/payments";
+import { isLivePaymentConfigured, isMockPayments } from "@/lib/payments";
 import { isValidIndianPhone } from "@/lib/rules";
-import { logEvent, recordFailedPayment, recordPurchase } from "@/lib/api";
+import { checkPaymentReadiness, logEvent, recordFailedPayment, recordPurchase } from "@/lib/api";
 
 export const Route = createFileRoute("/checkout")({
   validateSearch: (s: Record<string, unknown>) => ({ plan: (s["plan"] === "basic" ? "basic" : "pro") as "basic" | "pro" }),
@@ -38,8 +38,25 @@ function Checkout() {
   const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<{ message: string; paymentId: string } | null>(null);
+  const [paymentReadiness, setPaymentReadiness] = useState<{ ready: boolean; error?: string } | null>(
+    isMockPayments() ? { ready: true } : null,
+  );
 
   useEffect(() => { logEvent("checkout_started", { planId }); }, [planId]);
+
+  useEffect(() => {
+    if (isMockPayments()) return;
+    if (!isLivePaymentConfigured()) {
+      setPaymentReadiness({ ready: false, error: "Live Razorpay payments are not configured for this site." });
+      return;
+    }
+
+    let active = true;
+    void checkPaymentReadiness().then((result) => {
+      if (active) setPaymentReadiness(result);
+    });
+    return () => { active = false; };
+  }, []);
 
   function validate() {
     const e: Record<string, string> = {};
@@ -54,6 +71,10 @@ function Checkout() {
   async function submit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!validate()) return;
+    if (!paymentReadiness?.ready) {
+      setFailed(paymentReadiness?.error ?? "Checking payment setup. Please try again shortly.");
+      return;
+    }
     setBusy(true); setFailed(null); setSaveError(null);
     const r = await pay({ amount: plan.price, description: `${plan.name} plan`, ...form });
     setBusy(false);
@@ -97,8 +118,24 @@ function Checkout() {
 
         {saveError && (
           <div role="alert" className="mt-6 rounded-xl border border-destructive bg-destructive/5 p-4">
-            <p className="font-semibold text-destructive">Your payment went through, but we could not finish your enrollment</p>
-            <p className="text-sm">{saveError.message} Please do not pay again. Send this payment ID to {siteConfig.contactEmail} and we will activate your account: <b>{saveError.paymentId}</b></p>
+            {saveError.paymentId.startsWith("mock_") ? (
+              <>
+                <p className="font-semibold text-destructive">This was a simulated test payment, not a real charge</p>
+                <p className="text-sm">No money was taken. Test payments cannot activate an enrollment. To enroll, use the live payment option when it is available.</p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-destructive">Your payment went through, but we could not finish your enrollment</p>
+                <p className="text-sm">{saveError.message} Please do not pay again. Send this payment ID to {siteConfig.contactEmail} and we will activate your account: <b>{saveError.paymentId}</b></p>
+              </>
+            )}
+          </div>
+        )}
+
+        {paymentReadiness && !paymentReadiness.ready && (
+          <div role="alert" className="mt-6 rounded-xl border border-destructive bg-destructive/5 p-4">
+            <p className="font-semibold text-destructive">Live payments are not available right now</p>
+            <p className="text-sm">{paymentReadiness.error} No payment has been taken. Please contact {siteConfig.contactEmail} for help.</p>
           </div>
         )}
 
@@ -118,8 +155,8 @@ function Checkout() {
             <span>I agree to the <Link to="/terms" className="underline">terms</Link> and the <Link to="/refund-policy" className="underline">refund policy</Link>, and understand there are no refunds.</span>
           </label>
           {errors["agree"] && <p className="text-sm text-destructive">{errors["agree"]}</p>}
-          <Button type="submit" variant="cta" size="xl" className="w-full" disabled={busy}>
-            <Lock /> {failed ? "Retry payment" : `Pay ₹${plan.price.toLocaleString("en-IN")}`}
+          <Button type="submit" variant="cta" size="xl" className="w-full" disabled={busy || paymentReadiness?.ready !== true}>
+            <Lock /> {busy ? "Processing…" : paymentReadiness?.ready !== true ? "Payments unavailable" : failed ? "Retry payment" : `Pay ₹${plan.price.toLocaleString("en-IN")}`}
           </Button>
           <p className="text-center text-xs text-muted-foreground">One time payment in INR via Razorpay.{isMockPayments() && " (Test mode: no real payment.)"} Questions? {siteConfig.contactEmail}</p>
         </form>
