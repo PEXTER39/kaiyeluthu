@@ -34,7 +34,7 @@ Students then receive the 6 digit code by email, and the code no longer appears 
 
 1. In `src/config/site.ts` set your live `razorpayKeyId` (`rzp_live_...`) and `mockPayments: false`.
 2. In `.env` set the matching `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`.
-3. The checkout checks that live payments are configured on the server with the matching key before opening Razorpay. Test/simulated payments are only available in development and cannot enroll a student in production.
+3. The checkout checks that live payments are configured on the server with the matching key before opening Razorpay. Test/simulated payments are only available in development and cannot enroll a student in production. IDs beginning with `mock_` are simulations, not charges.
 
 ## Reviews, blog, FAQ
 
